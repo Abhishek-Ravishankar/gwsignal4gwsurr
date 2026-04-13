@@ -43,3 +43,7 @@ waveform-arguments-dict ={
 # Implemented models
 1. NRHybSur3dq8
 2. NRSur7dq4
+
+# Notes and Gotchas
+## 1. Requesting modes the right way
+1. For `NR_hdf5` in LALSim, `[[2,2]]` will only return the (2,2) mode but for most surrogate models (like NRHybSur3dq8 and NRSur7dq4), `[[2,2]]` will return the (2,2) and (2,-2) modes. For consistent injection PE with just the (2,2) mode, make sure to set `mode-array` to `[[2,2], [2,-2]]` for `NR_hdf5` and `[[2,2]]` for the surrogate models.
