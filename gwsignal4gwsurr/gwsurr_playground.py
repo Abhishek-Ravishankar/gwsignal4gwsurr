@@ -4,21 +4,37 @@ just made for playing around/debugging purposes
 """
 
 import gwsurrogate as gwsurr
+from gwsurrogate.new.surrogate import _splinterp_Cwrapper
+import gwtools
+from matplotlib.pyplot import plot
 from .gwsurr import NRHybSur3dq8_gwsurr,NRSur7dq4_gwsurr
 import numpy as np
 import lal
 import lalsimulation as lalsim
 import lalsimulation.gwsignal.core.gw as gw
+import pySurrogate as pysur
 
 # ignore spin magnitude/mass ratio outside training space warnings
 import warnings
 warnings.filterwarnings("ignore", message=".*Spin")
 warnings.filterwarnings("ignore", message=".*Mass ratio")
+# warnings.filterwarnings("ignore", message=".*Params")
 
-class NRSur3dq8_Lev2_varenya_gwsurr(NRHybSur3dq8_gwsurr):
+class NRSur3dq8_Lev2_varenya_gwsurr(NRSur7dq4_gwsurr):
     def __init__(self, **kwargs):
         self.sur = gwsurr.LoadSurrogate("NRSur3dq8_Lev2_varenya")
         self._update_domains()
+
+        # this is temporary because of APS rush
+        error_surrogate_phase_path = "/home/vupadhyaya_umassd_edu/surrogate_modeling/AlignedSpin/marginalization/error_surrogates/Results/Phase_till_merger/Leave0OutSur/Set0/Surrogate"
+
+        data_dict_file_path = "/home/vupadhyaya_umassd_edu/surrogate_modeling/AlignedSpin/marginalization/error_surrogates/Phase_TrainingDataDict_for_Sur.npz"
+
+        load = np.load(data_dict_file_path, allow_pickle=True)
+        data_dict = load['data'].item()
+        self.sur_error = pysur.DataModeler(data_dict['domain'],'PhaseError_Surrogate')
+        self.sur_error.load(error_surrogate_phase_path)
+
 
     @property
     def metadata(self):
@@ -37,8 +53,11 @@ class NRSur3dq8_Lev2_varenya_gwsurr(NRHybSur3dq8_gwsurr):
     def generate_td_modes(self, **parameters):
 
         extra_args = parameters.pop('extra_args')
+        mode_array = parameters.pop('ModeArray')
+
         noisy = extra_args.pop("noisy")
         noise_level = extra_args.pop("noise_level")
+        noise_model = extra_args.pop("noise_model")
 
         self.parameter_check(units_sys="Cosmo", **parameters)
         self.waveform_dict = self._strip_units(self.waveform_dict)
@@ -77,20 +96,49 @@ class NRSur3dq8_Lev2_varenya_gwsurr(NRHybSur3dq8_gwsurr):
             units="mks",  # Output in SI units
             M=m1 + m2,  # In solar masses
             dist_mpc=dist / 1e6,  # In Mpc
-            mode_list = [(2,2)]
+            mode_list = mode_array
         )
 
         #=============== add some phase noise ===============#
         if noisy:
-            delta_phi = noise_level * np.random.randn(len(h[(2, 2)]))
-            for ellm, h_array in h.items():
-                ell, m = ellm
-                h[ellm] = h_array * np.exp(1j * m * delta_phi)
+            if noise_model == 'gaussian':
+                delta_phi = noise_level * np.random.randn(len(h[(2, 2)]))
+                for ellm, h_array in h.items():
+                    m = ellm[1]
+                    h[ellm] = h_array * np.exp(1j * m * delta_phi)
+            elif noise_model == 'error_surrogate_phase':
+                t_scale = gwtools.Msuninsec*(m1+m2)
+                times_M = times/t_scale
+                
+                # call error surrogate with int params
+                phase_error = self.sur_error([q,s1z,s2z])
+                times_error_surrogate = self.sur_error.domain
+                # print('DBUG error surrogate domain=',times_error_surrogate)
+                # print('DBUG phase error surrogate len', len(phase_error))
+                # print('DBUG actual surrogate domain =',times )
+                # print('DBUG scaled surrogate domain =',times_M )
+
+                # interpolate onto surrogate grid
+
+                # if the requested domain is larger than the error surrogate domain,
+                # set everything outside the domain to zero
+                phase_error_bilby = np.zeros_like(h[(2,2)])
+                if times_M[-1]>times_error_surrogate[-1]:
+                    mask = (times_M>=times_error_surrogate[0]) & (times_M<=times_error_surrogate[-1])
+                    phase_error_bilby[mask] = _splinterp_Cwrapper(times_M[mask], times_error_surrogate, phase_error)
+                    
+                for ellm, h_array in h.items():
+                    m = ellm[1]
+                    h[ellm] = h_array * np.exp(-1j * phase_error_bilby/2 * m )
+                    # print('DBUG error array min, max, and median=',min(phase_error_bilby), max(phase_error_bilby),np.median(phase_error_bilby))
+                    
+            else:
+                raise Exception('Unrecognized error model')
         #====================================================#
+
 
         hlm = self._to_gwpy_series(h, times)
         return gw.GravitationalWaveModes(hlm)
-
 
 class NRSur3dq8_Lev3_varenya_gwsurr(NRSur3dq8_Lev2_varenya_gwsurr):
     def __init__(self, **kwargs):
