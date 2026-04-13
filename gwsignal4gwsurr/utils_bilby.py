@@ -14,10 +14,10 @@ from bilby.gw.conversion import (
     chirp_mass_and_mass_ratio_to_component_masses,
     convert_to_lal_binary_black_hole_parameters,
 )
-from scipy.special import kn
 from .gwsurr import (
     NRHybSur3dq8_gwsurr,
     NRSur7dq4_gwsurr,
+    NR_hdf5_gwsurr,
 )
 from .gwsurr_playground import (
     NRSur3dq8_Lev2_varenya_gwsurr,
@@ -47,7 +47,6 @@ class SurrogateWaveformProperties:
             self._instance = self.wrapper()
         return self._instance
 
-
 surrogate_models = {
     "NRHybSur3dq8": SurrogateWaveformProperties(
         precessing=False, wrapper=NRHybSur3dq8_gwsurr
@@ -62,7 +61,9 @@ surrogate_models = {
     "NRSur7dq4_LALSim": SurrogateWaveformProperties(
         precessing=True, wrapper=NRSur7dq4_LALSim_gwsurr
     ),
+    # "NR_hdf5": SurrogateWaveformProperties(precessing=True, wrapper=NR_hdf5_gwsurr),
 }
+
 
 
 # ===================== aligned spin frequency domain source model =====================
@@ -89,33 +90,45 @@ def gwsurrogate_binary_black_hole_aligned(
     model = surrogate_models[approximant]
     gen = model.instance
 
-    parameters = dict(
+
+    mode_array = None
+    mode_array_bilby = waveform_arguments.get("mode_array", None)
+
+    if mode_array_bilby is not None:
+        mode_array = [tuple(int(mode) for mode in ellm) for ellm in mode_array_bilby]
+
+
+    parameters: dict[str, Any] = dict(
         mass1=mass1 * u.Msun,
         mass2=mass2 * u.Msun,
         spin1z=spin1z * u.dimensionless_unscaled,
         spin2z=spin2z * u.dimensionless_unscaled,
         distance=distance * u.Mpc,
         inclination=theta_jn * u.rad,
-        phi_ref=(phi_ref) * u.rad,
+        phi_ref=phi_ref * u.rad,
         f22_start=f22_start * u.Hz,
         f22_ref=waveform_arguments["reference_frequency"] * u.Hz,
         f_max=waveform_arguments["maximum_frequency"] * u.Hz,
         deltaF=(freqs[1] - freqs[0]) * u.Hz,
+        ModeArray=mode_array * u.dimensionless_unscaled,
     )
 
-    # extra arguments to hand over to the model for marginalization
+    # extra arguments to hand over to the model for error marginalization
     extra_args = {}
     if model.marginalization_wferr:
         extra_args['noisy'] = waveform_arguments.get("noisy", False)
         extra_args['noise_level'] = waveform_arguments.get("noise_level", 1e-4)
+        extra_args['noise_model'] = waveform_arguments.get("noise_model", 'gaussian')
         parameters['extra_args'] = extra_args
+
+    # generate fd polarizations
     try:
         hp_gwsignal, hc_gwsignal = gen.generate_fd_polarizations_from_td(
             **parameters
         )
     except Exception as e:
         if waveform_arguments["catch_waveform_errors"]:
-            # print(f"WARN surrogate wrapper failed to generate waveform: {e}")
+            print(f"WARN surrogate wrapper failed to generate waveform: {e}")
             return None
         raise Exception(f"KILL surrogate wrapper failed to generate waveform: {e}")
 
@@ -180,30 +193,44 @@ def gwsurrogate_binary_black_hole_precessing(
     approximant = waveform_arguments["waveform_approximant"]
     gen = surrogate_models[approximant].instance
 
+    parameters: dict[str, Any] = dict(
+        mass1=mass1 * u.Msun,
+        mass2=mass2 * u.Msun,
+        spin1x=spin1x * u.dimensionless_unscaled,
+        spin1y=spin1y * u.dimensionless_unscaled,
+        spin1z=spin1z * u.dimensionless_unscaled,
+        spin2x=spin2x * u.dimensionless_unscaled,
+        spin2y=spin2y * u.dimensionless_unscaled,
+        spin2z=spin2z * u.dimensionless_unscaled,
+        distance=distance * u.Mpc,
+        inclination=theta_jn * u.rad,
+        phi_ref=phi_ref * u.rad,
+        f22_start=f22_start * u.Hz,
+        f22_ref=waveform_arguments["reference_frequency"] * u.Hz,
+        f_max=waveform_arguments["maximum_frequency"] * u.Hz,
+        deltaF=(freqs[1] - freqs[0]) * u.Hz,
+    )
+
+    lmax = waveform_arguments.get("lmax", None)
+    if lmax is not None:
+        parameters['lmax'] = lmax
+
+    # if NR waveform, add NR data file
+    if approximant == 'NR_hdf5':
+        parameters['NumRelData'] = waveform_arguments.get('numerical_relativity_file')
+
+    # genderate fd polarizations 
     try:
         hp_gwsignal, hc_gwsignal = gen.generate_fd_polarizations_from_td(
-            mass1=mass1 * u.Msun,
-            mass2=mass2 * u.Msun,
-            spin1x=spin1x * u.dimensionless_unscaled,
-            spin1y=spin1y * u.dimensionless_unscaled,
-            spin1z=spin1z * u.dimensionless_unscaled,
-            spin2x=spin2x * u.dimensionless_unscaled,
-            spin2y=spin2y * u.dimensionless_unscaled,
-            spin2z=spin2z * u.dimensionless_unscaled,
-            distance=distance * u.Mpc,
-            inclination=iota * u.rad,
-            phi_ref=phi_ref * u.rad,
-            f22_start=f22_start * u.Hz,
-            f22_ref=waveform_arguments["reference_frequency"] * u.Hz,
-            f_max=waveform_arguments["maximum_frequency"] * u.Hz,
-            deltaF=(freqs[1] - freqs[0]) * u.Hz,
+            **parameters
         )
     except Exception as e:
         if waveform_arguments["catch_waveform_errors"]:
-            print(f"PROG NRSur7dq4_wrapper failed to generate waveform: {e}")
+            print(f"PROG {approximant} failed to generate waveform: {e}")
             return None
         raise
 
+    # apply frequency mask and time shift
     hp, hc = np.zeros_like(freqs, dtype=complex), np.zeros_like(freqs, dtype=complex)
     minimum_frequency = waveform_arguments["minimum_frequency"]
     maximum_frequency = waveform_arguments["maximum_frequency"]
@@ -293,7 +320,6 @@ class SurrogateWaveformGenerator(WaveformGenerator):
         approximant = kwargs["waveform_arguments"]["waveform_approximant"]
         model = surrogate_models.get(approximant, None)
 
-        print(kwargs)
         #---------- temporary debugging code ----------#
         bilby = kwargs.pop('use_bilby',False)
         if bilby: 
