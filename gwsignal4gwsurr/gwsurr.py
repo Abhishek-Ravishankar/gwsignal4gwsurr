@@ -3,6 +3,12 @@ try:
 except ModuleNotFoundError as e:
     raise RuntimeError("The gwsurrogate package has failed to load") from e
 
+# VU: temporary until local code merges. 
+try:
+    import gwsurrogate_eccentric as gwsurr_ecc
+except ModuleNotFoundError as e:
+    raise RuntimeError("The gwsurrogate_eccentric package has failed to load") from e
+
 import lal
 import numpy as np
 from gwpy.timeseries import TimeSeries
@@ -38,14 +44,16 @@ class NRHybSur3dq8_gwsurr(CompactBinaryCoalescenceGenerator):
             "approximant": "NRHybSur3dq8",
             "implementation": "Python",
             "conditioning_routines": "gwsignal",
+            "length": "long"
         }
         return metadata
 
     def generate_td_modes(self, **parameters):
 
-        # Hacky because gwsignal is being weird about how modes are passed...
+        # VU: Hacky because gwsignal is being weird about how modes are passed...
         mode_array = parameters.pop("ModeArray")
 
+        # VU: note that this parameter check will convert Mpc to pc
         self.parameter_check(units_sys="Cosmo", **parameters)
         self.waveform_dict = self._strip_units(self.waveform_dict)
 
@@ -74,6 +82,7 @@ class NRHybSur3dq8_gwsurr(CompactBinaryCoalescenceGenerator):
         if q < 1.0:
             raise Exception("m2 should not be bigger than m1!")
 
+
         times, h, dyn = self.sur(
             q,
             chi1,
@@ -83,7 +92,7 @@ class NRHybSur3dq8_gwsurr(CompactBinaryCoalescenceGenerator):
             f_ref=f_ref,
             units="mks",  # Output in SI units
             M=m1 + m2,  # In solar masses
-            dist_mpc=dist / 1e6,  # In Mpc
+            dist_mpc=dist / 1e6,  # gwsignal converts Mpc to pc
             mode_list = mode_array
         )
 
@@ -269,6 +278,7 @@ class NRSur7dq4_gwsurr(CompactBinaryCoalescenceGenerator):
             "approximant": "NRSur7dq4",
             "implementation": "Python",
             "conditioning_routines": "gwsignal",
+            "length": "short"
         }
         return metadata
 
@@ -280,7 +290,7 @@ class NRSur7dq4_gwsurr(CompactBinaryCoalescenceGenerator):
 
         self.parameter_check(units_sys="Cosmo", **parameters)
         self.waveform_dict = self._strip_units(self.waveform_dict)
-        lmax = self.waveform_dict.get("ModeArray",4)
+        lmax = self.waveform_dict.get("ModeArray",None)
         f_start, dt = self.waveform_dict["f22_start"], self.waveform_dict["deltaT"]
         f_ref = self.waveform_dict["f22_ref"]
 
@@ -314,7 +324,7 @@ class NRSur7dq4_gwsurr(CompactBinaryCoalescenceGenerator):
             units="mks",  # Output in SI units
             M=m1 + m2,  # In solar masses
             dist_mpc=dist / 1e6,  # In Mpc
-            ellmax = lmax
+            ellMax = lmax
         )
 
         hlm = self._to_gwpy_series(h, times)
@@ -376,20 +386,7 @@ class NRSur7dq4_gwsurr(CompactBinaryCoalescenceGenerator):
             lal.DimensionlessUnit,
             len(hc_),
         )
-anda
-a
 
-a
-a
-a
-and
-aa
-a
-a
-and
-a
-
-a
         hp.data.data = hp_.value
         hc.data.data = hc_.value
 
@@ -465,7 +462,7 @@ class NR_hdf5_gwsurr(CompactBinaryCoalescenceGenerator):
 
     def __init__(self, **kwargs):
 
-        # super().__init__()
+        super().__init__()
         self._update_domains()
 
     @property
@@ -477,8 +474,9 @@ class NR_hdf5_gwsurr(CompactBinaryCoalescenceGenerator):
             "polarizations": True,
             "implemented_domain": "time",
             "approximant": "NR_hdf5",
-            "implementation": "??",
+            "implementation": "C++",
             "conditioning_routines": "gwsignal",
+            "length": "short"
         }
         return metadata
 
@@ -511,7 +509,7 @@ class NR_hdf5_gwsurr(CompactBinaryCoalescenceGenerator):
         spin2y = self.waveform_dict["spin2y"]
         spin2z = self.waveform_dict["spin2z"]
 
-        luminosity_distance= self.waveform_dict["distance"]
+        luminosity_distance= self.waveform_dict["distance"] # stripped from u.pc
 
         theta, phi = (
             self.waveform_dict["inclination"],
@@ -663,3 +661,73 @@ class NR_hdf5_gwsurr(CompactBinaryCoalescenceGenerator):
             else:
                 new_dc[key] = waveform_dict[key]
         return new_dc
+
+class NRSurE_NoSpin_gwsurr(NRSur7dq4_gwsurr):
+    """
+    Implements a toy wrapper for NRSur7dq4 in the gwsurrogate package
+    """
+
+    def __init__(self, **kwargs):
+
+        # super().__init__()
+
+        self.sur = gwsurr_ecc.LoadSurrogate('NRSurE_q4NoSpin_22')
+        self._update_domains()
+
+    @property
+    def metadata(self):
+        metadata = {
+            "type": "precessing",
+            "f_ref_spin": True,
+            "modes": True,
+            "polarizations": True,
+            "implemented_domain": "time",
+            "approximant": "NRSurE_??",
+            "implementation": "Python",
+            "conditioning_routines": "gwsignal",
+            "length": "short"
+        }
+        return metadata
+
+    def generate_td_modes(self, **parameters):
+        """
+        Generate modes by calling gwsurrogate
+        """
+
+
+        self.parameter_check(units_sys="Cosmo", **parameters)
+        self.waveform_dict = self._strip_units(self.waveform_dict)
+        f_start, dt = self.waveform_dict["f22_start"], self.waveform_dict["deltaT"]
+
+        if f_start!=0:
+            raise Exception('KILL NRSur_E does not currently support nonzero starting frequencies')
+
+        # VU: f_ref isn't actually passed, this might create problems during PE
+        f_ref = self.waveform_dict["f22_ref"]
+
+        m1, m2 = self.waveform_dict["mass1"], self.waveform_dict["mass2"]
+        chi1 = np.array([0.,0.,0.])
+        chi2 = np.array([0.,0.,0.])
+        e = self.waveform_dict['eccentricity']
+        meanano = self.waveform_dict['meanPerAno']
+        dist = self.waveform_dict["distance"]
+        q = m1 / m2  # This is the gwsurrogate convention, q=m1/m2>=1
+        if q < 1.0:
+            raise Exception("m2 should not be bigger than m1!")
+
+        times, h, dyn = self.sur(
+            q,
+            chi1,
+            chi2,
+            e=e,
+            meanano=meanano,
+            dt=dt,
+            f_low=f_start,
+            units="mks",  # Output in SI units
+            M=m1 + m2,  # In solar masses
+            dist_mpc=dist / 1e6,  # In Mpc
+        )
+
+        hlm = self._to_gwpy_series(h, times)
+        return gw.GravitationalWaveModes(hlm)
+
