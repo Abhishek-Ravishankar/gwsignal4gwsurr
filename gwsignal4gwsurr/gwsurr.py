@@ -1,3 +1,5 @@
+import warnings
+
 try:
     import gwsurrogate as gwsurr
 except ModuleNotFoundError as e:
@@ -6,8 +8,10 @@ except ModuleNotFoundError as e:
 # VU: temporary until local code merges. 
 try:
     import gwsurrogate_eccentric as gwsurr_ecc
-except ModuleNotFoundError as e:
-    raise RuntimeError("The gwsurrogate_eccentric package has failed to load") from e
+    warnings.filterwarnings("ignore", category=RuntimeWarning)
+except ModuleNotFoundError:
+    gwsurr_ecc = gwsurr
+    warnings.warn("Could not find an eccentric only gwsurrogate, reverting to gwsurrogate")
 
 import lal
 import numpy as np
@@ -19,7 +23,6 @@ import lalsimulation.gwsignal.core.gw as gw
 import lalsimulation as lalsim
 
 # ignore spin magnitude/mass ratio outside training space warnings
-import warnings
 warnings.filterwarnings("ignore", message=".*Spin")
 warnings.filterwarnings("ignore", message=".*Mass ratio")
 
