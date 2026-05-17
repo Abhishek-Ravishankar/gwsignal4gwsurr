@@ -376,7 +376,20 @@ class NRSur7dq4_gwsurr(CompactBinaryCoalescenceGenerator):
             lal.DimensionlessUnit,
             len(hc_),
         )
+anda
+a
 
+a
+a
+a
+and
+aa
+a
+a
+and
+a
+
+a
         hp.data.data = hp_.value
         hc.data.data = hc_.value
 

@@ -52,7 +52,7 @@ class NRSur3dq8_Lev2_varenya_gwsurr(NRSur7dq4_gwsurr):
 
     def generate_td_modes(self, **parameters):
 
-        extra_args = parameters.pop('extra_args')
+        extra_args = parameters.pop('extra_args',None)
         mode_array = parameters.pop('ModeArray')
 
         noisy = extra_args.pop("noisy")
@@ -203,3 +203,69 @@ class NRSur7dq4_LALSim_gwsurr(NRSur7dq4_gwsurr):
         )
         return hp_gwsignal, hc_gwsignal 
 
+class NRHybSur3dq8_short_gwsurr(NRSur7dq4_gwsurr):
+    def __init__(self, **kwargs):
+        self.sur = gwsurr.LoadSurrogate("NRHybSur3dq8")
+        self._update_domains()
+
+
+    @property
+    def metadata(self):
+        metadata = {
+            "type": "aligned-spin",
+            "f_ref_spin": True,
+            "modes": True,
+            "polarizations": True,
+            "implemented_domain": "time",
+            "approximant": "NRSurr",
+            "implementation": "Python",
+            "conditioning_routines": "gwsignal",
+        }
+        return metadata
+
+    def generate_td_modes(self, **parameters):
+
+        mode_array = parameters.pop('ModeArray')
+
+        self.parameter_check(units_sys="Cosmo", **parameters)
+        self.waveform_dict = self._strip_units(self.waveform_dict)
+        fstart, dt = self.waveform_dict["f22_start"], self.waveform_dict["deltaT"]
+        f_ref = self.waveform_dict["f22_ref"]
+
+        m1, m2 = self.waveform_dict["mass1"], self.waveform_dict["mass2"]
+        s1z = self.waveform_dict["spin1z"]
+        s2z = self.waveform_dict["spin2z"]
+        chi1 = np.array(
+            [
+                0.0,
+                0.0,
+                s1z,
+            ]
+        )
+        chi2 = np.array(
+            [
+                0.0,
+                0.0,
+                s2z,
+            ]
+        )
+        dist = self.waveform_dict["distance"]
+        q = m1 / m2
+        if q < 1.0:
+            raise Exception("m2 should not be bigger than m1!")
+
+        times, h, dyn = self.sur(
+            q,
+            chi1,
+            chi2,
+            dt=dt,
+            f_low=fstart,
+            f_ref=f_ref,
+            units="mks",  # Output in SI units
+            M=m1 + m2,  # In solar masses
+            dist_mpc=dist / 1e6,  # In Mpc
+            mode_list = mode_array
+        )
+
+        hlm = self._to_gwpy_series(h, times)
+        return gw.GravitationalWaveModes(hlm)
