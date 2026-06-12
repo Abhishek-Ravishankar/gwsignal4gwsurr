@@ -1,20 +1,18 @@
 [build-system]
-requires = ["setuptools>=65", "wheel"]
+requires = ["setuptools>=65", "wheel", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "gwsignal4gwsurr"
-version = "0.1.0"
+dynamic = ["version"]
 description = "gwsignal implementation to use waveform models from gwsurrogate"
+dependencies = ["numpy", "scipy", "bilby", "astropy"]
 
-dependencies = ["numpy", "scipy", "bilby","astropy"]
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["gwsignal4gwsurr"]
 
-
-
-
-
-
-
+[tool.setuptools_scm]
+write_to = "gwsignal4gwsurr/_version.py"
+version_scheme = "guess-next-dev"
+local_scheme = "dirty-tag"
