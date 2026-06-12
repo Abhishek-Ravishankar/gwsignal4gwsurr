@@ -218,7 +218,7 @@ def gwsurrogate_binary_black_hole_precessing(
         spin2y=spin2y * u.dimensionless_unscaled,
         spin2z=spin2z * u.dimensionless_unscaled,
         distance=distance * u.Mpc,
-        inclination=theta_jn * u.rad,
+        inclination=iota * u.rad,
         phi_ref=phi_ref * u.rad,
         f22_start=minimum_frequency * u.Hz,
         f22_ref=waveform_arguments["reference_frequency"] * u.Hz,
