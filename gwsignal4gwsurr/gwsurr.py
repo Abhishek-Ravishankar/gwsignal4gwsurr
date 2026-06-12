@@ -288,10 +288,10 @@ class NRSur7dq4_gwsurr(CompactBinaryCoalescenceGenerator):
         Generate modes by calling gwsurrogate
         """
 
-
         self.parameter_check(units_sys="Cosmo", **parameters)
         self.waveform_dict = self._strip_units(self.waveform_dict)
-        lmax = self.waveform_dict.get("ModeArray",None)
+
+        lmax = self.waveform_dict.get("lmax",None)
         f_start, dt = self.waveform_dict["f22_start"], self.waveform_dict["deltaT"]
         f_ref = self.waveform_dict["f22_ref"]
 
