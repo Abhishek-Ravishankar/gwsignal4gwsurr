@@ -4,18 +4,23 @@ just made for playing around/debugging purposes
 """
 
 import gwsurrogate as gwsurr
-from gwsurrogate.new.surrogate import _splinterp_Cwrapper
 import gwtools
-from matplotlib.pyplot import plot
 from .gwsurr import NRHybSur3dq8_gwsurr,NRSur7dq4_gwsurr
 import numpy as np
 import lal
 import lalsimulation as lalsim
 import lalsimulation.gwsignal.core.gw as gw
-import pySurrogate as pysur
+from lalsimulation.gwsignal.core.waveform import CompactBinaryCoalescenceGenerator
+import astropy.units as u
+import warnings
+from gwpy.timeseries import TimeSeries
+
+try: 
+    import sxs
+except ModuleNotFoundError:
+    warnings.warn("Could not find the sxs package, SXS-NR injections will not work")
 
 # ignore spin magnitude/mass ratio outside training space warnings
-import warnings
 warnings.filterwarnings("ignore", message=".*Spin")
 warnings.filterwarnings("ignore", message=".*Mass ratio")
 # warnings.filterwarnings("ignore", message=".*Params")

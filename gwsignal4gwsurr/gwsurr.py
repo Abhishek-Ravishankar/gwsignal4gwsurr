@@ -5,7 +5,16 @@ try:
 except ModuleNotFoundError as e:
     raise RuntimeError("The gwsurrogate package has failed to load") from e
 
-# VU: temporary until local code merges. 
+
+import lal
+import numpy as np
+from gwpy.timeseries import TimeSeries
+import astropy.units as u
+from lalsimulation.gwsignal.core.waveform import CompactBinaryCoalescenceGenerator
+import lalsimulation.gwsignal.core.gw as gw
+import lalsimulation as lalsim
+
+# VU: temporary until gwsurrogate is one again </3
 try:
     import gwsurrogate_eccentric as gwsurr_ecc
     warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -13,14 +22,12 @@ except ModuleNotFoundError:
     gwsurr_ecc = gwsurr
     warnings.warn("Could not find an eccentric only gwsurrogate, reverting to gwsurrogate")
 
-import lal
-import numpy as np
-from gwpy.timeseries import TimeSeries
-import astropy.units as u
-
-from lalsimulation.gwsignal.core.waveform import CompactBinaryCoalescenceGenerator
-import lalsimulation.gwsignal.core.gw as gw
-import lalsimulation as lalsim
+try:
+    import gwsurrogate_7dq4 as gwsurr_7dq4
+    warnings.filterwarnings("ignore", category=RuntimeWarning)
+except ModuleNotFoundError:
+    gwsurr_7dq4 = gwsurr
+    warnings.warn("Could not find a 7dq4v2 only gwsurrogate, reverting to gwsurrogate")
 
 # ignore spin magnitude/mass ratio outside training space warnings
 warnings.filterwarnings("ignore", message=".*Spin")

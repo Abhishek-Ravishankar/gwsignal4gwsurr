@@ -17,9 +17,7 @@ from bilby.gw.conversion import (
 from .gwsurr import (
     NRHybSur3dq8_gwsurr,
     NRSur7dq4_gwsurr,
-    NR_hdf5_gwsurr,
     NRSurE_NoSpin_gwsurr,
-    NRHybSur3dq8_CCE_gwsurr,
     NRSur7dq4v2_gwsurr,
 )
 from .gwsurr_playground import (
@@ -27,6 +25,9 @@ from .gwsurr_playground import (
     NRSur3dq8_Lev2_varenya_gwsurr,
     NRSur3dq8_Lev3_varenya_gwsurr,
     NRSur7dq4_LALSim_gwsurr,
+    NR_SXS,
+    NR_hdf5_gwsurr,
+    NRHybSur3dq8_CCE_gwsurr,
 )
 import numpy as np
 from typing import Optional, Any, Callable
@@ -56,24 +57,31 @@ surrogate_models = {
         precessing=False, wrapper=NRHybSur3dq8_gwsurr
     ),
     "NRSur7dq4": SurrogateWaveformProperties(precessing=True, wrapper=NRSur7dq4_gwsurr),
-    "NRSur3dq8_Lev2_varenya": SurrogateWaveformProperties(
-        precessing=False, wrapper=NRSur3dq8_Lev2_varenya_gwsurr,marginalization_wferr=True
-    ),
-    "NRSur3dq8_Lev3_varenya": SurrogateWaveformProperties(
-        precessing=False, wrapper=NRSur3dq8_Lev3_varenya_gwsurr,marginalization_wferr=True
-    ),
     "NRSur7dq4_LALSim": SurrogateWaveformProperties(
         precessing=True, wrapper=NRSur7dq4_LALSim_gwsurr
     ),
     # "NR_hdf5": SurrogateWaveformProperties(precessing=True, wrapper=NR_hdf5_gwsurr),
+    "NR_SXS": SurrogateWaveformProperties(precessing=True, wrapper=NR_SXS),
     "NRHybSur3dq8_short": SurrogateWaveformProperties(
         precessing=False, wrapper=NRHybSur3dq8_short_gwsurr
     ),
-    "NRSurE_NoSpin": SurrogateWaveformProperties(precessing=False,eccentric=True, wrapper=NRSurE_NoSpin_gwsurr),
-
-    "NRSur7dq4v2": SurrogateWaveformProperties(precessing=True, wrapper=NRSur7dq4v2_gwsurr),
+    "NRSurE_NoSpin": SurrogateWaveformProperties(
+        precessing=False, eccentric=True, wrapper=NRSurE_NoSpin_gwsurr
+    ),
+    "NRSur7dq4v2": SurrogateWaveformProperties(
+        precessing=True, wrapper=NRSur7dq4v2_gwsurr
+    ),
+    "NRSur3dq8_Lev2_varenya": SurrogateWaveformProperties(
+        precessing=False,
+        wrapper=NRSur3dq8_Lev2_varenya_gwsurr,
+        marginalization_wferr=True,
+    ),
+    "NRSur3dq8_Lev3_varenya": SurrogateWaveformProperties(
+        precessing=False,
+        wrapper=NRSur3dq8_Lev3_varenya_gwsurr,
+        marginalization_wferr=True,
+    ),
 }
-
 
 
 # ===================== aligned spin frequency domain source model =====================
