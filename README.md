@@ -21,9 +21,7 @@ Add to the .ini file:
 
 waveform-generator=gwsignal4gwsurr.waveform_generator.SurrogateWaveformGenerator
 waveform-approximant=NRHybSur3dq8
-waveform-arguments-dict ={
-  reference-frequency:20.,
-}
+reference-frequency:20.,
 ```
 
 # File tree
