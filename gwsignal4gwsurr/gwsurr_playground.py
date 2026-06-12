@@ -239,3 +239,329 @@ class NRHybSur3dq8_short_gwsurr(NRSur7dq4_gwsurr):
 
         hlm = self._to_gwpy_series(h, times)
         return gw.GravitationalWaveModes(hlm)
+
+# !!!! CODE WORK AHEAD !!!!
+class NR_SXS(NRSur7dq4_gwsurr):
+    """
+    Implements a toy wrapper for NR waveforms using the sxs package
+    """
+
+    def __init__(self, **kwargs):
+        self._update_domains()
+
+    @property
+    def metadata(self):
+        metadata = {
+            "type": "precessing",
+            "f_ref_spin": True,
+            "modes": True,
+            "polarizations": True,
+            "implemented_domain": "time",
+            "approximant": "NR_SXS",
+            "implementation": "Python",
+            "conditioning_routines": "gwsignal",
+            "length": "short"
+        }
+        return metadata
+
+    def generate_td_modes(self, **parameters):
+        """
+        Generate modes by calling sxs
+        """
+
+        SXS_ID = parameters.pop('SXS_ID')
+        ModeArray = parameters.pop('ModeArray',None)
+        print('DBUG got mode array', ModeArray)
+
+        self.parameter_check(units_sys="Cosmo", **parameters)
+        self.waveform_dict = self._strip_units(self.waveform_dict)
+
+        fstart, dt = self.waveform_dict["f22_start"], self.waveform_dict["deltaT"]
+        f_ref = self.waveform_dict["f22_ref"]
+
+        lmax = self.waveform_dict.get("lmax",None)
+        print('WARN hardcoding lmax=2')
+        lmax = 2
+
+        dist_mpc = self.waveform_dict['distance']/1e6
+        Mtot = self.waveform_dict['mass1']+self.waveform_dict['mass2']
+
+        amp_scale = Mtot*gwtools.Msuninsec*gwtools.c/(1e6*dist_mpc*gwtools.PC_SI)
+        t_scale = gwtools.Msuninsec * Mtot
+        print('DBUG gwsignal tscale=',t_scale)
+
+        fstart_M = fstart*t_scale
+        print('DBUG SXS fstarts:', fstart, fstart_M)
+        f_ref_M = f_ref*t_scale
+        dt_M = dt /t_scale
+        print('DBUG dt in natural units',dt_M)
+
+        # sxs function call to get dimless strain
+        sxs_bbh = sxs.load('SXS:BBH:%04d'%SXS_ID)
+
+        print('DBUG generating SXS waveform with args',
+            f_ref_M,
+            dt_M,
+            fstart_M,
+            lmax,
+            None,
+            None
+              )
+        times, h, _= sxs_bbh.to_lvk(
+            f_ref = f_ref_M,
+            dt = dt_M,
+            f_low = fstart_M,
+            ell_max = lmax,
+            phi_ref = None,
+            inclination = None
+        )
+
+        # convert to unitful qty using Mtot and d_lum
+        times *= t_scale
+
+        # h_dict = {}
+        # for k,v in h.items():
+        #     if k[0]>5:
+        #         break
+        #     print('DBUG rescaling mode',k,v)
+        #     h_dict[k] = v*amp_scale
+        #     print(h_dict[k])
+
+        h_dict = {
+            (2,2) : h[2,2]*amp_scale
+        }
+
+
+        hlm = self._to_gwpy_series(h_dict, times)
+        return gw.GravitationalWaveModes(hlm)
+
+
+    def generate_td_waveform(self, **parameters):
+        theta, phi = (
+            parameters["inclination"],
+            parameters["phi_ref"],
+        )
+        hlm = self.generate_td_modes(**parameters)
+        hp, hc = hlm(theta, phi)
+        hp, hc = TimeSeries(hp, name="hplus"), TimeSeries(hc, name="hcross")
+        return hp, hc
+
+class NR_hdf5_gwsurr(CompactBinaryCoalescenceGenerator):
+    """
+    Implements a wrapper for the NR_hdf5 model called from LALSim
+    """
+
+    def __init__(self, **kwargs):
+
+        super().__init__()
+        self._update_domains()
+
+    @property
+    def metadata(self):
+        metadata = {
+            "type": "precessing",
+            "f_ref_spin": True,
+            "modes": True,
+            "polarizations": True,
+            "implemented_domain": "time",
+            "approximant": "NR_hdf5",
+            "implementation": "C++",
+            "conditioning_routines": "gwsignal",
+            "length": "short"
+        }
+        return metadata
+
+    def generate_td_modes(self, **parameters):
+        """
+        Generate modes by calling LALSim for NR td waveform
+        """
+        return
+
+    def generate_td_waveform(self, **parameters):
+        """
+        Generate plus and cross polarizations from SimInspiralTD
+        """
+
+        mode_array = parameters.pop("ModeArray",None)
+        nr_data_file = parameters.pop('NumRelData')
+
+        self.parameter_check(units_sys="Cosmo", **parameters)
+        self.waveform_dict = self._strip_units(self.waveform_dict)
+        f_start, dt = self.waveform_dict["f22_start"], self.waveform_dict["deltaT"]
+        print('DBUG NR_hdf5 got dt=',dt)
+        f_ref = self.waveform_dict["f22_ref"]
+
+        mass1 = self.waveform_dict["mass1"]
+        mass2 = self.waveform_dict["mass2"]
+
+        spin1x = self.waveform_dict["spin1x"]
+        spin1y = self.waveform_dict["spin1y"]
+        spin1z = self.waveform_dict["spin1z"]
+        spin2x = self.waveform_dict["spin2x"]
+        spin2y = self.waveform_dict["spin2y"]
+        spin2z = self.waveform_dict["spin2z"]
+
+        luminosity_distance= self.waveform_dict["distance"] # stripped from u.pc
+
+        theta, phi = (
+            self.waveform_dict["inclination"],
+            np.pi / 2 - self.waveform_dict["phi_ref"],
+        )
+
+        approximant = lalsim.NR_hdf5
+
+        # Setup LAL parameters
+        LALparams = lal.CreateDict()
+        lalsim.SimInspiralWaveformParamsInsertNumRelData(LALparams, nr_data_file)
+
+        if mode_array is not None:
+            mode_array_lal = lalsim.SimInspiralCreateModeArray()
+            for mode in mode_array:
+                lalsim.SimInspiralModeArrayActivateMode(mode_array_lal, mode[0], mode[1])
+            lalsim.SimInspiralWaveformParamsInsertModeArray(LALparams, mode_array_lal)
+
+        # Get waveform polarizations from LALSim
+        hp_lal, hc_lal = lalsim.SimInspiralChooseTDWaveform(
+            mass1 * lal.MSUN_SI,
+            mass2 * lal.MSUN_SI,
+            spin1x, spin1y, spin1z,
+            spin2x, spin2y, spin2z,
+            luminosity_distance * lal.PC_SI,
+            theta,
+            phi,
+            0.,
+            0.,
+            0.,
+            dt,
+            f_start,
+            f_ref,
+            LALparams,
+            approximant
+        )
+
+        print('DBUG NR_hdf5 hp_lal', hp_lal, dir(hp_lal), dir(hp_lal.data))
+        # print('DBUG NR_hdf5 hp_lal', hp_lal, dir(hp_lal), hp_lal.data.dt, hp_lal.data.t0)
+        hp_data = hp_lal.data.data
+        hc_data = hc_lal.data.data
+
+        hp, hc = TimeSeries(hp_data, name="hplus"), TimeSeries(hc_data, name="hcross")
+        return hp, hc
+
+    def generate_fd_polarizations_from_td(self, **parameters):
+        """
+        """
+
+        # Adjust deltaT depending on sampling rate
+        fmax = parameters["f_max"].value
+        f_nyquist = fmax
+        deltaF = 0
+        if "deltaF" in parameters.keys():
+            deltaF = parameters["deltaF"].value
+
+        if deltaF != 0:
+            n = int(np.round(fmax / deltaF))
+            if n & (n - 1):
+                chirplen_exp = np.frexp(n)
+                f_nyquist = np.ldexp(1, int(chirplen_exp[1])) * deltaF
+
+        deltaT = 0.5 / f_nyquist
+        parameters["deltaT"] = deltaT * u.s
+
+        hp_, hc_ = self.generate_td_waveform(**parameters)
+
+        epoch = lal.LIGOTimeGPS(hp_.times[0].value)
+
+        hp = lal.CreateREAL8TimeSeries(
+            "hplus",
+            epoch,
+            0,
+            parameters["deltaT"].value,
+            lal.DimensionlessUnit,
+            len(hp_),
+        )
+        hc = lal.CreateREAL8TimeSeries(
+            "hcross",
+            epoch,
+            0,
+            parameters["deltaT"].value,
+            lal.DimensionlessUnit,
+            len(hc_),
+        )
+
+        hp.data.data = hp_.value
+        hc.data.data = hc_.value
+
+        # conditioning/tapering is done differently since this is a short waveform
+        # [cf. L#44 in LALSimInspiralGeneratorConditioning.c]
+        taper = True
+        lalsim.SimInspiralREAL8WaveTaper(hp.data, taper)
+        lalsim.SimInspiralREAL8WaveTaper(hc.data, taper)
+
+        # Adjust signal duration
+        if deltaF == 0:
+            chirplen = hp.data.length
+            chirplen_exp = np.frexp(chirplen)
+            chirplen = int(np.ldexp(1, chirplen_exp[1]))
+            deltaF = 1.0 / (chirplen * deltaT)
+            parameters["deltaF"] = deltaF
+
+        else:
+            chirplen = int(1.0 / (deltaF * deltaT))
+
+        # resize waveforms to the required length
+        lal.ResizeREAL8TimeSeries(hp, hp.data.length - chirplen, chirplen)
+        lal.ResizeREAL8TimeSeries(hc, hc.data.length - chirplen, chirplen)
+
+        # FFT - Using LAL routines
+        hptilde = lal.CreateCOMPLEX16FrequencySeries(
+            "FD H_PLUS",
+            hp.epoch,
+            0.0,
+            deltaF,
+            lal.DimensionlessUnit,
+            int(chirplen / 2.0 + 1),
+        )
+        hctilde = lal.CreateCOMPLEX16FrequencySeries(
+            "FD H_CROSS",
+            hc.epoch,
+            0.0,
+            deltaF,
+            lal.DimensionlessUnit,
+            int(chirplen / 2.0 + 1),
+        )
+
+        plan = lal.CreateForwardREAL8FFTPlan(chirplen, 0)
+        lal.REAL8TimeFreqFFT(hctilde, hc, plan)
+        lal.REAL8TimeFreqFFT(hptilde, hp, plan)
+
+        return hptilde, hctilde
+
+    def _to_gwpy_series(self, modes_dict, times):
+        """
+        Iterate over the dict and return a dict of gwpy TimeSeries objects
+        """
+        gwpy_dict = {}
+        for ellm, mode in modes_dict.items():
+            gwpy_dict[ellm] = TimeSeries(
+                mode, times=times, name="h_%i_%i" % (ellm[0], ellm[1])
+            )
+        return gwpy_dict
+
+    def _strip_units(self, waveform_dict):
+        new_dc = {}
+        for key in waveform_dict.keys():
+            if isinstance(waveform_dict[key], u.Quantity):
+                new_dc[key] = waveform_dict[key].value
+            else:
+                new_dc[key] = waveform_dict[key]
+        return new_dc
+
+class NRHybSur3dq8_CCE_gwsurr(NRHybSur3dq8_gwsurr):
+    """
+    Implements a toy wrapper for NRHybSur3dq8_CCE in the gwsurrogate package
+    #TODO: Implement tapering
+    """
+
+    def __init__(self, **kwargs):
+        self.sur = gwsurr.LoadSurrogate("NRHybSur3dq8_CCE")
+        self._update_domains()
