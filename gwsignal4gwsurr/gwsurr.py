@@ -60,8 +60,8 @@ class NRHybSur3dq8_gwsurr(CompactBinaryCoalescenceGenerator):
 
     def generate_td_modes(self, **parameters):
 
-        # VU: Hacky because gwsignal is being weird about how modes are passed...
-        mode_array = parameters.pop("ModeArray")
+        # VU: Exclude from parameter check because gwsignal is being weird about how modes are passed...
+        mode_array = parameters.pop("ModeArray",None)
 
         # VU: note that this parameter check will convert Mpc to pc
         self.parameter_check(units_sys="Cosmo", **parameters)
@@ -692,7 +692,7 @@ class NRSurE_NoSpin_gwsurr(NRSur7dq4_gwsurr):
             "modes": True,
             "polarizations": True,
             "implemented_domain": "time",
-            "approximant": "NRSurE_??",
+            "approximant": "NRSurE_q4NoSpin_22",
             "implementation": "Python",
             "conditioning_routines": "gwsignal",
             "length": "short"
@@ -749,7 +749,7 @@ class NRSur7dq4v2_gwsurr(NRSur7dq4_gwsurr):
     def __init__(self, **kwargs):
 
         # super().__init__()
-        self.sur = gwsurr.LoadSurrogate("NRSur7dq4v2")
+        self.sur = gwsurr_7dq4.LoadSurrogate("NRSur7dq4v2")
         self._update_domains()
     
     @property

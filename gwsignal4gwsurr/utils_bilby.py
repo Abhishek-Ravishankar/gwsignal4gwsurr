@@ -103,21 +103,17 @@ def gwsurrogate_binary_black_hole_aligned(
             k_ = k.replace("-", "_")
             waveform_arguments[k_] = waveform_arguments.pop(k)
 
-
     minimum_frequency = waveform_arguments.get("minimum_frequency")
-    maximum_frequency = waveform_arguments.get("maximum_frequency",freqs[-1])
+    maximum_frequency = waveform_arguments.get("maximum_frequency", freqs[-1])
     approximant = waveform_arguments["waveform_approximant"]
     model = surrogate_models[approximant]
     gen = model.instance
-
 
     mode_array = None
     mode_array_bilby = waveform_arguments.get("mode_array", None)
 
     if mode_array_bilby is not None:
         mode_array = [tuple(int(mode) for mode in ellm) for ellm in mode_array_bilby]
-
-
 
     parameters: dict[str, Any] = dict(
         mass1=mass1 * u.Msun,
@@ -137,18 +133,16 @@ def gwsurrogate_binary_black_hole_aligned(
     # extra arguments to hand over to the model for error marginalization
     extra_args = {}
     if model.marginalization_wferr:
-        extra_args['noisy'] = waveform_arguments.get("noisy", False)
-        extra_args['noise_level'] = waveform_arguments.get("noise_level", 1e-4)
-        extra_args['noise_model'] = waveform_arguments.get("noise_model", 'gaussian')
-        parameters['extra_args'] = extra_args
+        extra_args["noisy"] = waveform_arguments.get("noisy", False)
+        extra_args["noise_level"] = waveform_arguments.get("noise_level", 1e-4)
+        extra_args["noise_model"] = waveform_arguments.get("noise_model", "gaussian")
+        parameters["extra_args"] = extra_args
 
     # generate fd polarizations
     try:
-        hp_gwsignal, hc_gwsignal = gen.generate_fd_polarizations_from_td(
-            **parameters
-        )
+        hp_gwsignal, hc_gwsignal = gen.generate_fd_polarizations_from_td(**parameters)
     except Exception as e:
-        if waveform_arguments.get("catch_waveform_errors",False):
+        if waveform_arguments.get("catch_waveform_errors", False):
             print(f"WARN surrogate wrapper failed to generate waveform: {e}")
             return None
         raise Exception(f"KILL surrogate wrapper failed to generate waveform: {e}")
@@ -193,7 +187,7 @@ def gwsurrogate_binary_black_hole_precessing(
 ):
 
     minimum_frequency = waveform_arguments.get("minimum_frequency")
-    maximum_frequency = waveform_arguments.get("maximum_frequency",freqs[-1])
+    maximum_frequency = waveform_arguments.get("maximum_frequency", freqs[-1])
 
     # convert to cartesian spins
     # iota is angle between orbital angular momentum and line of sight (\theta_LN)
@@ -234,19 +228,20 @@ def gwsurrogate_binary_black_hole_precessing(
 
     lmax = waveform_arguments.get("lmax", None)
     if lmax is not None:
-        parameters['lmax'] = lmax
+        parameters["lmax"] = lmax
 
     # if NR waveform, add NR data file
-    if approximant == 'NR_hdf5':
-        parameters['NumRelData'] = waveform_arguments.get('numerical_relativity_file')
+    if approximant == "NR_hdf5":
+        parameters["NumRelData"] = waveform_arguments.get("numerical_relativity_file")
 
-    # genderate fd polarizations 
+    if approximant == "NR_SXS":
+        parameters["SXS_ID"] = waveform_arguments.get("SXS_ID")
+
+    # genderate fd polarizations
     try:
-        hp_gwsignal, hc_gwsignal = gen.generate_fd_polarizations_from_td(
-            **parameters
-        )
+        hp_gwsignal, hc_gwsignal = gen.generate_fd_polarizations_from_td(**parameters)
     except Exception as e:
-        if waveform_arguments.get("catch_waveform_errors",False):
+        if waveform_arguments.get("catch_waveform_errors", False):
             print(f"PROG {approximant} failed to generate waveform: {e}")
             return None
         raise
@@ -295,13 +290,11 @@ def gwsurrogate_binary_black_hole_eccentric_nospin(
             k_ = k.replace("-", "_")
             waveform_arguments[k_] = waveform_arguments.pop(k)
 
-
     minimum_frequency = waveform_arguments.get("minimum_frequency")
-    maximum_frequency = waveform_arguments.get("maximum_frequency",freqs[-1])
+    maximum_frequency = waveform_arguments.get("maximum_frequency", freqs[-1])
     approximant = waveform_arguments["waveform_approximant"]
     model = surrogate_models[approximant]
     gen = model.instance
-
 
     parameters: dict[str, Any] = dict(
         mass1=mass1 * u.Msun,
@@ -319,11 +312,9 @@ def gwsurrogate_binary_black_hole_eccentric_nospin(
 
     # generate fd polarizations
     try:
-        hp_gwsignal, hc_gwsignal = gen.generate_fd_polarizations_from_td(
-            **parameters
-        )
+        hp_gwsignal, hc_gwsignal = gen.generate_fd_polarizations_from_td(**parameters)
     except Exception as e:
-        if waveform_arguments.get("catch_waveform_errors",False):
+        if waveform_arguments.get("catch_waveform_errors", False):
             print(f"WARN surrogate wrapper failed to generate waveform: {e}")
             return None
         raise Exception(f"KILL surrogate wrapper failed to generate waveform: {e}")
@@ -386,14 +377,35 @@ def parameter_conversion_AlignedSpin(parameters):
 
     elif "a_1" in parameters.keys():
         # if  spins are specified using a_1, a_2 etc (which is done
-        # for some reason during injection-recovery tests), check that the spins are 
+        # for some reason during injection-recovery tests), check that the spins are
         # near aligned spin and do the corresponding conversion
 
-        if not ((np.any(np.isclose([parameters["tilt_1"],parameters["tilt_1"]],[0,np.pi],atol=1e-6))) and (np.any(np.isclose([parameters["tilt_2"],parameters["tilt_2"]],[0,np.pi] ,atol=1e-6)))): 
-            raise Exception('KILL beepboop you are attempting to use aligned spin model for a precessing system. If this is something you actually want to do, manually override this exception and brace for impact...')
+        if not (
+            (
+                np.any(
+                    np.isclose(
+                        [parameters["tilt_1"], parameters["tilt_1"]],
+                        [0, np.pi],
+                        atol=1e-6,
+                    )
+                )
+            )
+            and (
+                np.any(
+                    np.isclose(
+                        [parameters["tilt_2"], parameters["tilt_2"]],
+                        [0, np.pi],
+                        atol=1e-6,
+                    )
+                )
+            )
+        ):
+            raise Exception(
+                "KILL beepboop you are attempting to use aligned spin model for a precessing system. If this is something you actually want to do, manually override this exception and brace for impact..."
+            )
 
-        spins["spin1z"] = parameters["a_1"]*np.cos(parameters["tilt_1"])
-        spins["spin2z"] = parameters["a_2"]*np.cos(parameters["tilt_2"])
+        spins["spin1z"] = parameters["a_1"] * np.cos(parameters["tilt_1"])
+        spins["spin2z"] = parameters["a_2"] * np.cos(parameters["tilt_2"])
 
     else:
         raise Exception("KILL Weird spin definition")
@@ -406,6 +418,7 @@ def parameter_conversion_AlignedSpin(parameters):
             keys.append(key)
 
     return converted_parameters, keys
+
 
 def parameter_conversion_eccentric_nospin(parameters):
     # replace '-' with '_' in keys
@@ -446,6 +459,7 @@ def parameter_conversion_eccentric_nospin(parameters):
 
     return converted_parameters, keys
 
+
 def parameter_conversion(parameters):
     # replace '-' with '_' in keys
     for k in list(parameters.keys()):
@@ -483,7 +497,6 @@ def parameter_conversion(parameters):
     spins["phi_12"] = parameters["phi_12"]
     spins["phi_jl"] = parameters["phi_jl"]
 
-
     converted_parameters = masses | spins | extrinsic
 
     keys = []
@@ -493,19 +506,22 @@ def parameter_conversion(parameters):
 
     return converted_parameters, keys
 
+
 class SurrogateWaveformGenerator(WaveformGenerator):
     def __init__(self, **kwargs):
         approximant = kwargs["waveform_arguments"]["waveform_approximant"]
         model = surrogate_models.get(approximant, None)
 
-        #--- Circumvent this interface and use bilby defaults---#
-        if kwargs.pop('use_bilby',False):
-            model=None
-        #-------------------------------------------------------#
+        # --- Circumvent this interface and use bilby defaults---#
+        if kwargs.pop("use_bilby", False):
+            model = None
+        # -------------------------------------------------------#
 
         # if approximant isn't present in surrogate_models, revert to bilby defaults
         if model is None:
-            print(f"INFO approximant {approximant} not implemented, reverting to bilby defaults")
+            print(
+                f"INFO approximant {approximant} not implemented, reverting to bilby defaults"
+            )
             print(
                 "INFO updating frequency_domain_source_model to", lal_binary_black_hole
             )
